@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Azure API Management Semantic Caching Flow</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            padding: 30px;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+        .diagram-container {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            overflow-x: auto;
+        }
+        .mermaid {
+            text-align: center;
+        }
+    </style>
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            themeVariables: {
+                fontSize: '16px'
+            },
+            flowchart: {
+                htmlLabels: true,
+                curve: 'basis',
+                nodeSpacing: 50,
+                rankSpacing: 50
+            }
+        });
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>Azure API Management Semantic Caching</h1>
+
+        <div class="diagram-container">
+            <div class="mermaid">
+flowchart TD
+    Start([Client / user sends prompt<br/>to AI application]) --> Receive[APIM receives the request]
+    
+    Receive --> CallEmbed[APIM calls Embeddings Model<br/>to convert prompt to vector]
+    
+    CallEmbed --> EmbedReturn[Embeddings Model returns<br/>vector representation of prompt]
+    
+    EmbedReturn --> QueryCache[APIM queries Redis Cache<br/>using vector similarity search]
+    
+    QueryCache --> Decision{Similar prompt<br/>in cache?<br/>score > 0.8?}
+    
+    %% Cache Miss Path
+    Decision -->|NO - Cache Miss| Forward[APIM forwards request to<br/>gpt-4.1-mini in Azure AI Foundry]
+    
+    Forward --> Generate[Model generates response]
+    
+    Generate --> ReceiveResp[APIM receives response<br/>from backend]
+    
+    ReceiveResp --> Store[APIM stores prompt embeddings<br/>+ response in Redis Cache<br/>TTL: 120 seconds]
+    
+    Store --> ReturnMiss[APIM returns response<br/>to client]
+    
+    ReturnMiss --> EndMiss([End])
+    
+    %% Cache Hit Path
+    Decision -->|YES - Cache Hit| Retrieve[APIM retrieves cached<br/>response from Redis]
+    
+    Retrieve --> ReturnHit[APIM returns cached response<br/>to client / user]
+    
+    ReturnHit --> EndHit([End])
+    
+    %% Styling
+    classDef startEnd fill:#e1f5e1,stroke:#4caf50,stroke-width:2px,color:#000
+    classDef process fill:#e3f2fd,stroke:#2196f3,stroke-width:2px,color:#000
+    classDef decision fill:#fff3e0,stroke:#ff9800,stroke-width:3px,color:#000
+    classDef cacheMiss fill:#ffebee,stroke:#f44336,stroke-width:2px,color:#000
+    classDef cacheHit fill:#e0e0e0,stroke:#757575,stroke-width:2px,color:#000
+    
+    class Start,EndMiss,EndHit startEnd
+    class Receive,CallEmbed,EmbedReturn,QueryCache process
+    class Decision decision
+    class Forward,Generate,ReceiveResp,Store,ReturnMiss cacheMiss
+    class Retrieve,ReturnHit cacheHit
+            </div>
+        </div>
+        
+        <div style="background: #f0f4f8; border-radius: 8px; padding: 20px; margin-top: 20px;">
+            <h2 style="margin-top: 0; color: #333; text-align: center;">Similarity Score Threshold Configuration</h2>
+            <p style="text-align: center; font-size: 18px; margin: 10px 0;">
+                <strong>Score Range: 0.01 - 1.0</strong>
+            </p>
+            <div style="display: flex; justify-content: space-around; gap: 20px; margin-top: 20px;">
+                <div style="flex: 1; padding: 15px; background: #e8f5e9; border-left: 4px solid #4caf50; border-radius: 4px;">
+                    <h3 style="margin: 0 0 10px 0; color: #2e7d32;">LOWER Threshold (0.1-0.3)</h3>
+                    <p style="margin: 5px 0;">• Sets a high bar for similarity matching</p>
+                    <p style="margin: 5px 0;">• More unique cache entries created</p>
+                    <p style="margin: 5px 0;">• Each slightly different prompt gets its own cache entry</p>
+                    <p style="margin: 5px 0; font-weight: bold;">• Result: More accurate/closely related responses</p>
+                </div>
+                <div style="flex: 1; padding: 15px; background: #fff3e0; border-left: 4px solid #ff9800; border-radius: 4px;">
+                    <h3 style="margin: 0 0 10px 0; color: #e65100;">HIGHER Threshold (0.8-1.0)</h3>
+                    <p style="margin: 5px 0;">• Sets a low bar for similarity matching</p>
+                    <p style="margin: 5px 0;">• Fewer unique cache entries created</p>
+                    <p style="margin: 5px 0;">• Many varied prompts share the same cached response</p>
+                    <p style="margin: 5px 0; font-weight: bold;">• Result: Less accurate/potentially unrelated responses</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
